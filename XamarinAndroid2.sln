@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XamarinAndroid2.Android", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XamarinAndroid2", "XamarinAndroid2\XamarinAndroid2\XamarinAndroid2.csproj", "{B4848437-1263-4783-9E16-8568F4DFF08B}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "folder", "folder", "{9CD85E16-68C7-4929-BCAA-CB744D204627}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -28,6 +30,9 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{2DC5997E-7F6E-443B-9670-29F4DF3280DE} = {9CD85E16-68C7-4929-BCAA-CB744D204627}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {1541649B-1CEB-405D-8F83-1F4C73568732}
