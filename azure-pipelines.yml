@@ -1,0 +1,141 @@
+variables:
+  system.debug: 'false'
+  MOBILECENTER_OUTPUT_DIRECTORY: $(Build.ArtifactStagingDirectory)/build
+  MOBILECENTER_BRANCH: master
+  MOBILECENTER_BUILD_ID: $(Build.BuildNumber)
+  MOBILECENTER_SOURCE_DIRECTORY: $(Build.Repository.LocalPath)
+  MOBILECENTER_TRIGGER: continuous
+  APPCENTER_OUTPUT_DIRECTORY: $(Build.ArtifactStagingDirectory)/build
+  APPCENTER_BRANCH: master
+  APPCENTER_BUILD_ID: $(Build.BuildNumber)
+  APPCENTER_SOURCE_DIRECTORY: $(Build.Repository.LocalPath)
+  APPCENTER_TRIGGER: continuous
+  artifactVersioning.build.format: buildId
+  buildScripts.toolset: '{}'
+  Xamarin.Android: /Library/Frameworks/Xamarin.Android.framework/Commands/generator
+  keystoreFilename: appcenter.keystore
+  keystoreEncoded: null
+  MOBILECENTER_XAMARIN_PROJECT: XamarinAndroidApp/XamarinAndroidApp.csproj
+  MOBILECENTER_XAMARIN_CONFIGURATION: Debug
+  APPCENTER_XAMARIN_PROJECT: XamarinAndroidApp/XamarinAndroidApp.csproj
+  APPCENTER_XAMARIN_CONFIGURATION: Debug
+  buildBundle: 'false'
+  sonoma.tags: 'continuous,xamarin,signed,android'
+name: $(Build.BuildId)
+jobs:
+  - job: Phase_1
+    displayName: Build
+    cancelTimeoutInMinutes: 0
+    pool:
+      name: Azure Pipelines
+      vmImage: macOS-11
+    steps:
+      - checkout: self
+        clean: true
+        submodules: recursive
+        lfs: true
+      - task: PowerShell@2
+        displayName: Install build scripts
+        continueOnError: true
+        inputs:
+          targetType: inline
+          scriptName: ''
+          script: >-
+            Set-Location -Path '$(Agent.HomeDirectory)'
+
+            Invoke-WebRequest -Uri
+            'https://appcenterbuildassets.azureedge.net/buildscripts/appcenter-build-assets-latest.zip'
+            -OutFile 'appcenter-build-assets-latest.zip'
+
+            if (Test-Path ./scripts) { Remove-Item -Path ./scripts -Force
+            -Recurse }
+
+            New-Item -ItemType directory -Path 'scripts' | Out-Null
+
+            unzip -q -d 'scripts' 'appcenter-build-assets-latest.zip'
+
+            Invoke-Expression 'bash ./scripts/init.sh'
+          failOnStderr: true
+      - task: ShellScript@2
+        displayName: Tag build
+        inputs:
+          scriptPath: $(Agent.HomeDirectory)/scripts/emit-tags.sh
+          args: $(sonoma.tags)
+      - task: CmdLine@1
+        displayName: Set Mono version
+        inputs:
+          filename: /bin/bash
+          arguments: >-
+            -c "echo '##vso[task.setvariable
+            variable=DYLD_FALLBACK_LIBRARY_PATH;]'/Library/Frameworks/Mono.framework/Versions/6_12_3/lib:/lib:/usr/lib:$DYLD_LIBRARY_FALLBACK_PATH;echo
+            '##vso[task.setvariable
+            variable=PKG_CONFIG_PATH;]'/Library/Frameworks/Mono.framework/Versions/6_12_3/lib/pkgconfig:/Library/Frameworks/Mono.framework/Versions/6_12_3/share/pkgconfig:$PKG_CONFIG_PATH;echo
+            '##vso[task.setvariable
+            variable=PATH;]'/Library/Frameworks/Mono.framework/Versions/6_12_3/bin:$PATH"
+      - task: ShellScript@2
+        displayName: Set Xamarin SDK Bundle
+        inputs:
+          scriptPath: $(Agent.HomeDirectory)/scripts/select-xamarin-sdk.sh
+          args: 6123
+          disableAutoCwd: true
+          cwd: $(System.DefaultWorkingDirectory)
+      - task: UseDotNet@2
+        displayName: Switch .NET Core version
+        inputs:
+          version: 3.1.401
+      - task: CmdLine@1
+        displayName: Restore Nuget
+        inputs:
+          filename: /bin/bash
+          arguments: >-
+            -c "/usr/bin/find . -name '*.sln' -type f -print0 | /usr/bin/xargs
+            -0 grep -l 'XamarinAndroidApp.csproj' | /usr/bin/xargs -I '{}' nuget
+            restore '{}' -DisableParallelProcessing"
+      - task: CmdLine@1
+        displayName: Set version code
+        inputs:
+          filename: /usr/bin/find
+          arguments: >-
+            . -name "AndroidManifest.xml" -exec sed -i '' -e
+            "s/android:versionCode=\"[0-9]*\"/android:versionCode=\"$(Build.BuildNumber)\"/g"
+            {} ;
+      - task: XamarinAndroid@1
+        displayName: Build Xamarin.Android project
+        inputs:
+          configuration: Debug
+          project: XamarinAndroidApp/XamarinAndroidApp.csproj
+          jdkArchitecture: x86
+      - task: AndroidSigning@3
+        displayName: Sign APK
+        inputs:
+          keystoreFile: $(keystoreSecureFileId)
+          keystorePass: $(keystorePassword)
+          keystoreAlias: $(keyAlias)
+          keyPass: $(keyPassword)
+          apksignerArguments: '-verbose'
+      - task: CmdLine@1
+        displayName: Making Output Folder
+        inputs:
+          filename: /bin/mkdir
+          arguments: $(build.artifactstagingdirectory)/build
+      - task: CmdLine@1
+        displayName: Copy build files to staging
+        inputs:
+          filename: /bin/bash
+          arguments: >-
+            -c "/usr/bin/find . -path '*/bin/*' ! -path '*/obj/*' -type f !
+            -name '*-Signed.apk' ! -name '*-armeabi-v7a.apk' ! -name
+            '*-arm64-v8a.apk' ! -name '*-x86.apk' ! -name '*-x86_64.apk' -name
+            '*.apk' -print0 | xargs -0 stat -f \"%m %N\" | sort -rn | head -1 |
+            cut -f2- -d\" \" | xargs -L 1 -I{} cp -R -v {}
+            $(build.artifactstagingdirectory)/build"
+      - task: ShellScript@2
+        displayName: Xamarin Android Postprocess
+        inputs:
+          scriptPath: $(Agent.HomeDirectory)/scripts/android-xamarin-postprocess.sh
+          args: $(build.artifactstagingdirectory)/build/*.apk
+      - task: PublishBuildArtifacts@1
+        displayName: Publish build
+        inputs:
+          PathtoPublish: $(build.artifactstagingdirectory)/build
+          ArtifactName: build
