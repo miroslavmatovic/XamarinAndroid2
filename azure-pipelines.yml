@@ -13,13 +13,6 @@ variables:
   artifactVersioning.build.format: buildId
   buildScripts.toolset: '{}'
   Xamarin.Android: /Library/Frameworks/Xamarin.Android.framework/Commands/generator
-  keystorePassword: $(keystorePassword)
-  keyAlias: $(keyAlias)
-  keyPassword: $(keyPassword)
-  keystoreFilename: appcenter.keystore
-  keystoreSecureFileId: $(keystoreSecureFileId)
-  keystoreSecureFilename: $(keystoreSecureFilename)
-  keystoreEncoded: null
   MOBILECENTER_XAMARIN_PROJECT: XamarinAndroidApp/XamarinAndroidApp.csproj
   MOBILECENTER_XAMARIN_CONFIGURATION: Debug
   APPCENTER_XAMARIN_PROJECT: XamarinAndroidApp/XamarinAndroidApp.csproj
